@@ -1,12 +1,12 @@
+from __future__ import print_function, absolute_import
+
 from sqlalchemy import create_engine
 from sqlalchemy.sql import text
 from sqlalchemy.types import *
-
 import warnings
 import datetime as dt
 import pandas as pd
 import numpy as np
-from __future__ import print_function, absolute_import
 import gm.api as gm 
 import tushare as ts
 import jqdatasdk as jq
