@@ -13,7 +13,7 @@ six>=1.13.0
 mysql-connector-python==8.0.22
 jqdatasdk>=1.8.5
 tushare>=1.2.18
-akshare>=0.7.77
+akshare>=0.7.73
 baostock==0.8.8
 gm>=3.0.131
 tqdm>=4.56.0
