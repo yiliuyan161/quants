@@ -23,6 +23,8 @@ class Code(object):
             self.code = code[3:9] + code[0:3].replace('sz.', '.XSHE').replace('sh.', '.XSHG')
         elif len(code)==11 and (code.startswith('SHSE') or code.startswith('SZSE')):
             self.code==code[5:]+code[0:4].replace('SZSE', '.XSHE').replace('SHSE', '.XSHG')
+        else:
+            self.code=code
 
     def tushare(self):
         return self.code.replace('.XSHE','.SZ').replace('.XSHG','.SH')
