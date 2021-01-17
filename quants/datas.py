@@ -155,7 +155,7 @@ class Datas:
         return df1[['open','high','low','close','volume','money']].copy()
 
     def stock_history_db(self,db,start_dt=(dt.datetime.now()-dt.timedelta(days=750)),end_dt=dt.datetime.now()):
-        df=pd.read_sql("select * from stock_dailybar where time>='{start}' and time<='{end}'".format(start_dt=str(start_dt.date()),end_dt=str(end_dt.date())),self.engine)
+        df=pd.read_sql("select * from stock_dailybar where time>='{start}' and time<='{end}' order by time asc".format(start_dt=str(start_dt.date()),end_dt=str(end_dt.date())),self.engine)
         return df
         
     def hkstock_history_d(self,code,start_dt=(dt.datetime.now()-dt.timedelta(days=750)),end_dt=dt.datetime.now()):
@@ -163,7 +163,7 @@ class Datas:
         df['datetime']=pd.to_datetime(df['trade_date'])
         df.columns=['ts_code', 'trade_date', 'open', 'high', 'low', 'close', 'pre_close',
             'change', 'pct_chg', 'volume', 'money', 'datetime']
-        return df.set_index('datetime')[['open','high','low','close','pre_close','change','pct_chg','volume','money']].copy()
+        return df.set_index('datetime')[['open','high','low','close','pre_close','change','pct_chg','volume','money']].iloc[::-1].copy()
 
     def stock_history_date_all(self,date):
         """单日所有股票K线"""
@@ -181,7 +181,7 @@ class Datas:
         #df['code']=self.jq.normalize_code(df['ts_code'].tolist())
         df['volume']=df['vol']*100
         df['money']=df['amount']*1000
-        return df.set_index('datetime')[['pre_close', 'open', 'high', 'low', 'close','change', 'pct_chg', 'volume', 'money']].copy()
+        return df.set_index('datetime')[['pre_close', 'open', 'high', 'low', 'close','change', 'pct_chg', 'volume', 'money']].iloc[::-1].copy()
 
     def eft_history_date_all(self,date):
         """单日ETF所有K线"""
