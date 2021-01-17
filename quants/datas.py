@@ -11,6 +11,7 @@ import gm.api as gm
 import tushare as ts
 import jqdatasdk as jq
 import baostock as bs
+import jqdatasdk.finance_service as finance_service
 
 
 class Code(object):
@@ -36,6 +37,8 @@ class Code(object):
         return self.code[6,11].replace('.XSHE','sz').replace('.XSHG','sh')+self.code[0:6]
     def gm(self):
         return self.code[6:11].replace('.XSHE','SZSE.').replace('.XSHG','SHSE.')+self.code[0:6]
+    def number(self):
+        return self.code[0:6]
 
 class DT(object):
     def __init__(self,dates):
@@ -126,6 +129,8 @@ class Datas:
     def get_con(self):
         return self.engine
 
+        
+
     def stock_history_m(self,code,start_dt=(dt.datetime.now()-dt.timedelta(days=30)),end_dt=dt.datetime.now(),unit='30m'):
         """单只股票指定时间段分钟K线 支持 5m 15m 30m 60m """
         rs = bs.query_history_k_data_plus(Code(code).baostock(),
@@ -148,6 +153,17 @@ class Datas:
         df['money']=df['money']*1000
         df1=df.set_index('datetime')
         return df1[['open','high','low','close','volume','money']].copy()
+
+    def stock_history_db(self,db,start_dt=(dt.datetime.now()-dt.timedelta(days=750)),end_dt=dt.datetime.now()):
+        df=pd.read_sql("select * from stock_dailybar where time>='{start}' and time<='{end}'".format(start_dt=str(start_dt.date()),end_dt=str(end_dt.date())),self.engine)
+        return df
+        
+    def hkstock_history_d(self,code,start_dt=(dt.datetime.now()-dt.timedelta(days=750)),end_dt=dt.datetime.now()):
+        df = self.ts_pro.hk_daily(ts_code=code, start_date=DT(start_dt).tushare(), end_date=DT(end_dt).tushare())
+        df['datetime']=pd.to_datetime(df['trade_date'])
+        df.columns=['ts_code', 'trade_date', 'open', 'high', 'low', 'close', 'pre_close',
+            'change', 'pct_chg', 'volume', 'money', 'datetime']
+        return df.set_index('datetime')[['open','high','low','close','pre_close','change','pct_chg','volume','money']].copy()
 
     def stock_history_date_all(self,date):
         """单日所有股票K线"""
@@ -175,18 +191,59 @@ class Datas:
         df['volume']=df['vol']*100
         df['money']=df['amount']*1000
         return df[['datetime','code','pre_close', 'open', 'high', 'low', 'close','change', 'pct_chg', 'volume', 'money']].copy()
+
+
+
+
+    def get_fundamentals(self,query_object, date=None, statDate=None):
+        """
+        查询财务数据, 详细的数据字段描述在 https://www.joinquant.com/data/dict/fundamentals 中查看
+
+        :param query_object 一个sqlalchemy.orm.query.Query对象
+        :param date 查询日期, 一个字符串(格式类似’2015-10-15’)或者datetime.date/datetime.datetime对象, 可以是None, 使用默认日期
+        :param statDate: 财报统计的季度或者年份, 一个字符串, 有两种格式:1.季度: 格式是: 年 + ‘q’ + 季度序号, 例如: ‘2015q1’, ‘2013q4’. 2.年份: 格式就是年份的数字, 例如: ‘2015’, ‘2016’.
+        :return 返回一个 pandas.DataFrame, 每一行对应数据库返回的每一行(可能是几个表的联合查询结果的一行), 列索引是你查询的所有字段;为了防止返回数据量过大, 我们每次最多返回10000行;当相关股票上市前、退市后，财务数据返回各字段为空
+        """
+        if date is None and statDate is None:
+            date = dt.date.today() - dt.timedelta(days=1)
+        sql = finance_service.get_fundamentals_sql(query_object, date, statDate)
+        return self.sql_df(sql)
+
     
     def stock_instruments(self):
         """所有股票"""
-        return self.sql_df(SQLS.stock_concepts())
+        return self.sql_df(SQLS.stock_securities())
     
     def etf_instruments(self):
         """所有ETF"""
-        return self.sql_df(SQLS.etf_securities())    
+        df = self.ts_pro.fund_basic(market='E')
+        df['code']=jq.normalize_code(df['ts_code'].tolist())
+        df['found_date']=pd.to_datetime(df['found_date'])
+        df['due_date']=pd.to_datetime(df['due_date'])
+        df['list_date']=pd.to_datetime(df['list_date'])
+        df['issue_date']=pd.to_datetime(df['issue_date'])
+        df['delist_date']=pd.to_datetime(df['delist_date'])
+        return df[['code', 'name', 'management', 'custodian', 'fund_type', 'found_date',
+            'due_date', 'list_date', 'issue_date', 'delist_date', 'issue_amount',
+            'm_fee', 'c_fee', 'duration_year', 'p_value', 'min_amount',
+            'exp_return', 'benchmark', 'status', 'invest_type', 'type', 'trustee',
+            'purc_startdate', 'redm_startdate', 'market']].copy()
+        
+    def hkstock_instruments(self):
+        df = self.ts_pro.hk_basic()
+        df['list_date']=pd.to_datetime(df['list_date'])
+        df['delist_date']=pd.to_datetime(df['delist_date'])
+        return df[['code', 'name', 'fullname', 'enname', 'cn_spell', 'market',
+            'list_status', 'list_date', 'delist_date', 'trade_unit', 'isin',
+            'curr_type']].copy()
+ 
     
     def stock_concepts(self):
         """所有股票概念"""
         return self.sql_df(SQLS.stock_concepts())
+
+    def stock_moneyflow(self,code,start_date=(dt.datetime.now()-dt.timedelta(days=30)),end_date=dt.datetime.now()):
+        return self.sql_df(SQLS.stock_moneyflow(code,start_date,end_date))
 
     def stock_valuation_all(self,date):
         """单交易日所有股票估值"""
@@ -307,37 +364,32 @@ class SQLS(object):
     def stock_securities():
         return "select * from securities where type='stock'"
 
-    @staticmethod
-    def etf_securities():
-        return "select * from securities where type='etf'"
     
     @staticmethod
     def stock_concepts():
         return "select * from stock_concept"
+
     @staticmethod
-    def stock_hot_rank_code(code=None):
-        return "select * from stock_hot_rank where code='{code}'".format(code=code)
-            
+    def stock_moneyflow(code,start_date=(dt.datetime.now()-dt.timedelta(days=30)),end_date=dt.datetime.now()):
+        return "select * from stock_moneyflow where sec_code='{code}' and date>='{start_dt}' and date<='{end_dt}' ".format(code=Code(code).jq(),start_dt=str(start_date.date()),end_dt=str(end_date.date()))
+
     @staticmethod
-    def stock_hot_rank_date(start_date=None,end_date=None):
-        if start_date==None and end_date==None:
-            return "select * from stock_hot_rank where date>='{date}'".format(date=(dt.datetime.now()-dt.timedelta(days=30)).strftime("%Y-%m-%d"))
-        elif start_date!=None and end_date==None: 
-            return "select * from stock_hot_rank where date>='{date}'".format(date=start_date.strftime("%Y-%m-%d"))
-        elif start_date!=None and end_date!=None: 
-            return "select * from stock_hot_rank where date>='{date}' and date<='{end}'".format(date=start_date.strftime("%Y-%m-%d"),end=end_date.strftime("%Y-%m-%d"))
-        
+    def stock_valuation(code,start_date=(dt.datetime.now()-dt.timedelta(days=30)),end_date=dt.datetime.now()):
+        return "select * from stock_valuation where code='{code}' and pubDate>='{start_dt}' and pubDate<='{end_dt}' ".format(code=Code(code).jq(),start_dt=str(start_date.date()),end_dt=str(end_date.date()))
+
+ 
     @staticmethod
-    def stock_holder_number_code(code):
-        return "select * from stk_holdernumber where code ='{code}'".format(code=code)
+    def stock_holder_number_change(code):
+        return "select * from stock_holder_number_change where code ='{code}'".format(code=Code(code).jq())
+    
     @staticmethod
     def stock_holder_number_all(start_date=None,end_date=None):
         if start_date==None and end_date==None:
-            return "select * from stk_holdernumber where ann_date>='{date}'".format(date=(dt.datetime.now()-dt.timedelta(days=30)).strftime("%Y-%m-%d"))
+            return "select * from stock_holder_number_change where NoticeDate>='{date}'".format(date=(dt.datetime.now()-dt.timedelta(days=30)).strftime("%Y-%m-%d"))
         elif start_date!=None and end_date==None: 
-            return "select * from stock_hot_rank where ann_date>='{date}'".format(date=start_date.strftime("%Y-%m-%d"))
+            return "select * from stock_holder_number_change where NoticeDate>='{date}'".format(date=start_date.strftime("%Y-%m-%d"))
         elif start_date!=None and end_date!=None: 
-            return "select * from stock_hot_rank where ann_date>='{date}' and ann_date<='{end}'".format(date=start_date.strftime("%Y-%m-%d"),end=end_date.strftime("%Y-%m-%d"))
+            return "select * from stock_holder_number_change where NoticeDate>='{date}' and NoticeDate<='{end}'".format(date=start_date.strftime("%Y-%m-%d"),end=end_date.strftime("%Y-%m-%d"))
     
     
         
