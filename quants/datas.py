@@ -152,7 +152,7 @@ class Datas:
         df['volume']=df['volume']*100
         df['money']=df['money']*1000
         df1=df.set_index('datetime')
-        return df1[['open','high','low','close','volume','money']].copy()
+        return df1[['open','high','low','close','volume','money']].iloc[::-1].copy()
 
     def stock_history_db(self,db,start_dt=(dt.datetime.now()-dt.timedelta(days=750)),end_dt=dt.datetime.now()):
         df=pd.read_sql("select * from stock_dailybar where time>='{start}' and time<='{end}' order by time asc".format(start_dt=str(start_dt.date()),end_dt=str(end_dt.date())),self.engine)
